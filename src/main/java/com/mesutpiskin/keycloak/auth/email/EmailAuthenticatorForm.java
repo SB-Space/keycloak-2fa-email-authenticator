@@ -274,7 +274,9 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator
             return false;
         }
 
-        if (codeContext.submittedCode().equals(codeContext.storedCode()))
+        String enteredCode = codeContext.submittedCode().strip().replace(" ", "");
+
+        if (enteredCode.equals(codeContext.storedCode()))
             return true;
 
         // AuthenticationExecutionModel execution = context.getExecution();
