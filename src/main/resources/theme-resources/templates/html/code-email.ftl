@@ -1,7 +1,8 @@
 <#import "template.ftl" as layout>
 <@layout.emailLayout title=msg("emailOtpTitle") previewText=msg("emailOtpPreview")>
     <p class="p"><strong>${msg("emailGreeting", user.firstName!user.username)}</strong></p>
-    <p class="p">${msg("emailOtpIntro", realmName, ttl)}</p>
+    <#assign ttlMinutes = (ttl?number / 60)?ceiling>
+    <p class="p">${msg("emailOtpIntro", ttlMinutes)}</p>
 
 <#-- Display the 6-digit code large, grouped 3+3 with a space -->
     <#assign left = (code?length >= 3)?then(code?substring(0,3), code)>
