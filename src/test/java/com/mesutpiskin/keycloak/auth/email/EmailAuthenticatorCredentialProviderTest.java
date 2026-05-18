@@ -174,5 +174,52 @@ class EmailAuthenticatorCredentialProviderTest {
 
             assertTrue(result, "Should be configured when stored credential exists, regardless of skipSetup");
         }
+
+        @Test
+        @DisplayName("Returns true when at least one of multiple flows has skipSetup=true (anyMatch)")
+        void testMultipleFlows_anySkipSetupTrue_returnsTrue() {
+            AuthenticationFlowModel flow2 = mock(AuthenticationFlowModel.class);
+            AuthenticationExecutionModel exec2 = mock(AuthenticationExecutionModel.class);
+            AuthenticatorConfigModel config2 = mock(AuthenticatorConfigModel.class);
+
+            when(flow2.getId()).thenReturn("flow-2");
+            when(realm.getAuthenticationFlowsStream()).thenReturn(Stream.of(flow, flow2));
+            when(realm.getAuthenticationExecutionsStream("flow-2")).thenReturn(Stream.of(exec2));
+            when(exec2.getAuthenticator()).thenReturn(EmailAuthenticatorFormFactory.PROVIDER_ID);
+            when(exec2.getAuthenticatorConfig()).thenReturn("config-2");
+            when(realm.getAuthenticatorConfigById("config-2")).thenReturn(config2);
+
+            // First flow: skipSetup=false, second flow: skipSetup=true
+            when(config.getConfig()).thenReturn(Map.of(EmailConstants.SKIP_SETUP, "false"));
+            when(config2.getConfig()).thenReturn(Map.of(EmailConstants.SKIP_SETUP, "true"));
+            when(user.getEmail()).thenReturn("user@example.com");
+
+            boolean result = provider.isConfiguredFor(realm, user, EmailAuthenticatorCredentialModel.TYPE_ID);
+
+            assertTrue(result, "Should be configured when any flow has skipSetup=true");
+        }
+
+        @Test
+        @DisplayName("Returns false when all flows have skipSetup=false and no stored credential")
+        void testMultipleFlows_allSkipSetupFalse_returnsFalse() {
+            AuthenticationFlowModel flow2 = mock(AuthenticationFlowModel.class);
+            AuthenticationExecutionModel exec2 = mock(AuthenticationExecutionModel.class);
+            AuthenticatorConfigModel config2 = mock(AuthenticatorConfigModel.class);
+
+            when(flow2.getId()).thenReturn("flow-2");
+            when(realm.getAuthenticationFlowsStream()).thenReturn(Stream.of(flow, flow2));
+            when(realm.getAuthenticationExecutionsStream("flow-2")).thenReturn(Stream.of(exec2));
+            when(exec2.getAuthenticator()).thenReturn(EmailAuthenticatorFormFactory.PROVIDER_ID);
+            when(exec2.getAuthenticatorConfig()).thenReturn("config-2");
+            when(realm.getAuthenticatorConfigById("config-2")).thenReturn(config2);
+
+            when(config.getConfig()).thenReturn(Map.of(EmailConstants.SKIP_SETUP, "false"));
+            when(config2.getConfig()).thenReturn(Map.of(EmailConstants.SKIP_SETUP, "false"));
+            when(user.getEmail()).thenReturn("user@example.com");
+
+            boolean result = provider.isConfiguredFor(realm, user, EmailAuthenticatorCredentialModel.TYPE_ID);
+
+            assertFalse(result, "Should not be configured when all flows have skipSetup=false and no stored credential");
+        }
     }
 }

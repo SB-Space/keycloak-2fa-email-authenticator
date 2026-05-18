@@ -1,5 +1,7 @@
 package com.mesutpiskin.keycloak.auth.email;
 
+import java.util.List;
+
 import org.jboss.logging.Logger;
 import org.keycloak.credential.CredentialInput;
 import org.keycloak.credential.CredentialInputValidator;
@@ -49,7 +51,7 @@ public class EmailAuthenticatorCredentialProvider
     }
 
     private boolean isSkipSetupEnabled(RealmModel realm) {
-        return realm.getAuthenticationFlowsStream()
+        List<Boolean> values = realm.getAuthenticationFlowsStream()
                 .flatMap(flow -> realm.getAuthenticationExecutionsStream(flow.getId()))
                 .filter(exec -> EmailAuthenticatorFormFactory.PROVIDER_ID.equals(exec.getAuthenticator())
                         || ConditionalEmailAuthenticatorFormFactory.PROVIDER_ID.equals(exec.getAuthenticator()))
@@ -65,8 +67,12 @@ public class EmailAuthenticatorCredentialProvider
                     }
                     return EmailConstants.DEFAULT_SKIP_SETUP;
                 })
-                .findFirst()
-                .orElse(EmailConstants.DEFAULT_SKIP_SETUP);
+                .toList();
+        // If no email authenticator executions exist in any flow, fall back to the default.
+        // Otherwise return true if *any* execution has skip-setup enabled so that the behaviour
+        // is deterministic even when the same authenticator is configured in multiple flows.
+        return values.isEmpty() ? EmailConstants.DEFAULT_SKIP_SETUP
+                : values.stream().anyMatch(Boolean::booleanValue);
     }
 
     @Override

@@ -392,34 +392,7 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator
     @Override
     public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
         EmailAuthenticatorCredentialProvider provider = getCredentialProvider(session);
-        if (provider != null && provider.isConfiguredFor(realm, user, getType(session))) {
-            return true;
-        }
-        if (isSkipSetupEnabled(realm)) {
-            return user.getEmail() != null && !user.getEmail().isBlank();
-        }
-        return false;
-    }
-
-    private boolean isSkipSetupEnabled(RealmModel realm) {
-        return realm.getAuthenticationFlowsStream()
-                .flatMap(flow -> realm.getAuthenticationExecutionsStream(flow.getId()))
-                .filter(exec -> EmailAuthenticatorFormFactory.PROVIDER_ID.equals(exec.getAuthenticator())
-                        || ConditionalEmailAuthenticatorFormFactory.PROVIDER_ID.equals(exec.getAuthenticator()))
-                .map(exec -> {
-                    String configId = exec.getAuthenticatorConfig();
-                    if (configId != null) {
-                        AuthenticatorConfigModel config = realm.getAuthenticatorConfigById(configId);
-                        if (config != null && config.getConfig() != null) {
-                            return Boolean.parseBoolean(
-                                    config.getConfig().getOrDefault(EmailConstants.SKIP_SETUP,
-                                            String.valueOf(EmailConstants.DEFAULT_SKIP_SETUP)));
-                        }
-                    }
-                    return EmailConstants.DEFAULT_SKIP_SETUP;
-                })
-                .findFirst()
-                .orElse(EmailConstants.DEFAULT_SKIP_SETUP);
+        return provider != null && provider.isConfiguredFor(realm, user, getType(session));
     }
 
     @Override
