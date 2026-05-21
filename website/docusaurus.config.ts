@@ -20,7 +20,7 @@ const config: Config = {
   url: "https://mesutpiskin.github.io",
   baseUrl: "/keycloak-2fa-email-authenticator/",
 
-  organizationName: "io.github.mesutpiskin",
+  organizationName: "mesutpiskin",
   projectName: "keycloak-2fa-email-authenticator",
   trailingSlash: false,
 
