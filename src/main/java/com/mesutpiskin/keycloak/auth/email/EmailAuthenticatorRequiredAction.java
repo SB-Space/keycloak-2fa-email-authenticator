@@ -47,7 +47,9 @@ public class EmailAuthenticatorRequiredAction implements RequiredActionProvider,
 
     @Override
     public void evaluateTriggers(RequiredActionContext context) {
-        // Not needed for self-service setup
+        // isConfiguredFor() in EmailAuthenticatorCredentialProvider handles the skipSetup case
+        // (returns true when user has email and skipSetup is enabled), so auto-enrollment
+        // here is not needed and would create unwanted credentials in account management.
     }
 
     @Override
@@ -157,6 +159,8 @@ public class EmailAuthenticatorRequiredAction implements RequiredActionProvider,
                     resetSetupCode(session);
                     var form = context.form();
                     form.setAttribute("maxAttemptsReached", true);
+                    form.setAttribute("codeLength", resolvePositiveInt(configMap, EmailConstants.CODE_LENGTH,
+                            EmailConstants.DEFAULT_LENGTH));
                     form.setError(Messages.TOO_MANY_ATTEMPTS);
                     context.challenge(form.createForm(VERIFY_TEMPLATE));
                 } else {
@@ -259,7 +263,8 @@ public class EmailAuthenticatorRequiredAction implements RequiredActionProvider,
 
         return realm.getAuthenticationFlowsStream()
                 .flatMap(flow -> realm.getAuthenticationExecutionsStream(flow.getId()))
-                .filter(exec -> EmailAuthenticatorFormFactory.PROVIDER_ID.equals(exec.getAuthenticator()))
+                .filter(exec -> EmailAuthenticatorFormFactory.PROVIDER_ID.equals(exec.getAuthenticator())
+                        || ConditionalEmailAuthenticatorFormFactory.PROVIDER_ID.equals(exec.getAuthenticator()))
                 .map(exec -> {
                     String configId = exec.getAuthenticatorConfig();
                     if (configId != null) {
@@ -302,6 +307,10 @@ public class EmailAuthenticatorRequiredAction implements RequiredActionProvider,
         if (remaining != null && remaining > 0L) {
             form.setAttribute("resendAvailableInSeconds", remaining);
         }
+
+        Map<String, String> configMap = findAuthenticatorConfig(context);
+        int codeLength = resolvePositiveInt(configMap, EmailConstants.CODE_LENGTH, EmailConstants.DEFAULT_LENGTH);
+        form.setAttribute("codeLength", codeLength);
 
         if (error != null) {
             form.setError(error, errorParams);

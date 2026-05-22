@@ -23,6 +23,7 @@ import org.keycloak.credential.CredentialProvider;
 import org.jboss.logging.Logger;
 import jakarta.ws.rs.core.MultivaluedMap;
 import jakarta.ws.rs.core.Response;
+
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -137,7 +138,8 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator
         } else {
             sendEmailWithCode(context, code, ttl);
         }
-        session.setAuthNote(EmailConstants.CODE, code);
+
+        session.setAuthNote(EmailConstants.CODE, OtpHashUtils.hash(code));
         long now = System.currentTimeMillis();
         session.setAuthNote(EmailConstants.CODE_TTL, Long.toString(now + (ttl * 1000L)));
         session.setAuthNote(EmailConstants.CODE_RESEND_AVAILABLE_AFTER, Long.toString(now + (resendCooldown * 1000L)));
@@ -276,32 +278,37 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator
         }
 
         String enteredCode = codeContext.submittedCode().strip().replace(" ", "");
-
-        if (enteredCode.equals(codeContext.storedCode()))
+        if (OtpHashUtils.matches(codeContext.submittedCode(), codeContext.storedCode())) {
             return true;
+        }
 
         context.getEvent().user(user).error(Errors.INVALID_USER_CREDENTIALS);
 
-        AuthenticationSessionModel session = context.getAuthenticationSession();
-        int attempts = incrementAttempts(session);
-
-        AuthenticatorConfigModel config = context.getAuthenticatorConfig();
-        Map<String, String> configValues = config != null && config.getConfig() != null
-                ? config.getConfig()
-                : Map.of();
-        int maxAttempts = resolvePositiveInt(configValues, EmailConstants.MAX_ATTEMPTS,
-                EmailConstants.DEFAULT_MAX_ATTEMPTS);
-
-        if (attempts >= maxAttempts) {
-            resetEmailCode(context);
-            LoginFormsProvider form = prepareForm(context, null);
-            form.setAttribute("maxAttemptsReached", true);
-            applyFormMessage(form, "email-authenticator-too-many-attempts", EmailConstants.CODE);
-            Response challengeResponse = form.createForm("email-code-form.ftl");
-            context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, challengeResponse);
-        } else {
+        if (context.getRealm().isBruteForceProtected()) {
             Response challengeResponse = challenge(context, Messages.INVALID_ACCESS_CODE, EmailConstants.CODE);
             context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, challengeResponse);
+        } else {
+            AuthenticationSessionModel session = context.getAuthenticationSession();
+            int attempts = incrementAttempts(session);
+
+            AuthenticatorConfigModel config = context.getAuthenticatorConfig();
+            Map<String, String> configValues = config != null && config.getConfig() != null
+                    ? config.getConfig()
+                    : Map.of();
+            int maxAttempts = resolvePositiveInt(configValues, EmailConstants.MAX_ATTEMPTS,
+                    EmailConstants.DEFAULT_MAX_ATTEMPTS);
+
+            if (attempts >= maxAttempts) {
+                resetEmailCode(context);
+                LoginFormsProvider form = prepareForm(context, null);
+                form.setAttribute("maxAttemptsReached", true);
+                applyFormMessage(form, "email-authenticator-too-many-attempts", EmailConstants.CODE);
+                Response challengeResponse = form.createForm("email-code-form.ftl");
+                context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, challengeResponse);
+            } else {
+                Response challengeResponse = challenge(context, Messages.INVALID_ACCESS_CODE, EmailConstants.CODE);
+                context.failureChallenge(AuthenticationFlowError.INVALID_CREDENTIALS, challengeResponse);
+            }
         }
         return false;
     }
@@ -312,6 +319,13 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator
         Long secondsToExpose = remainingSeconds != null ? remainingSeconds : getRemainingSeconds(session);
         if (secondsToExpose != null && secondsToExpose > 0L)
             form.setAttribute("resendAvailableInSeconds", secondsToExpose);
+
+        AuthenticatorConfigModel config = context.getAuthenticatorConfig();
+        Map<String, String> configValues = config != null && config.getConfig() != null
+                ? config.getConfig()
+                : Map.of();
+        int codeLength = resolvePositiveInt(configValues, EmailConstants.CODE_LENGTH, EmailConstants.DEFAULT_LENGTH);
+        form.setAttribute("codeLength", codeLength);
 
         return form;
     }
@@ -378,7 +392,8 @@ public class EmailAuthenticatorForm extends AbstractUsernameFormAuthenticator
 
     @Override
     public boolean configuredFor(KeycloakSession session, RealmModel realm, UserModel user) {
-        return getCredentialProvider(session).isConfiguredFor(realm, user, getType(session));
+        EmailAuthenticatorCredentialProvider provider = getCredentialProvider(session);
+        return provider != null && provider.isConfiguredFor(realm, user, getType(session));
     }
 
     @Override
